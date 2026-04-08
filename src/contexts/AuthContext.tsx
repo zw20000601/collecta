@@ -29,6 +29,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const getSuperAdminEmail = () =>
     normalizeEmail(import.meta.env.VITE_SUPER_ADMIN_EMAIL || import.meta.env.VITE_ADMIN_EMAIL)
 
+  const isUserBanned = async (userId?: string) => {
+    if (!userId) return false
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('status')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (error) {
+      console.warn('[auth] Failed to read profile status:', error.message)
+      return false
+    }
+
+    return data?.status === 'banned'
+  }
+
   const promoteConfiguredAdmin = async (currentSession: Session) => {
     const configuredAdminEmail = getSuperAdminEmail()
     const currentEmail = normalizeEmail(currentSession.user?.email)
@@ -81,6 +98,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const syncSession = async (currentSession: Session | null) => {
       if (!mounted) return
 
+      // If account is banned after login, force sign-out on next session sync.
+      if (currentSession?.user) {
+        const banned = await isUserBanned(currentSession.user.id)
+        if (banned) {
+          await supabase.auth.signOut()
+          if (!mounted) return
+          setSession(null)
+          setUser(null)
+          setIsAdmin(false)
+          setIsSuperAdmin(false)
+          setIsGuest(false)
+          setLoading(false)
+          return
+        }
+      }
+
       setSession(currentSession)
       setUser(currentSession?.user ?? null)
 
@@ -110,8 +143,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return { error: error as Error | null }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      return { error: error as Error | null }
+    }
+
+    const userId = data?.user?.id
+    const banned = await isUserBanned(userId)
+
+    if (banned) {
+      await supabase.auth.signOut()
+      return { error: new Error('该账号已被禁用，请联系管理员') }
+    }
+
+    return { error: null }
   }
 
   const register = async (email: string, password: string) => {
