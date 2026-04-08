@@ -11,6 +11,7 @@ import {
   ChevronRight,
   ExternalLink,
   ClipboardCheck,
+  ScrollText,
 } from 'lucide-react'
 
 function getPageTitle(pathname: string) {
@@ -21,6 +22,7 @@ function getPageTitle(pathname: string) {
     '/admin/messages': '留言管理',
     '/admin/users': '用户管理',
     '/admin/logs': '操作日志',
+    '/admin/changelog': '更新日志管理',
     '/admin/approvals': '审批中心',
   }
   return map[pathname] || '管理后台'
@@ -43,6 +45,7 @@ export default function AdminLayout() {
         { to: '/admin/categories', label: '分类管理', icon: Tag },
         { to: '/admin/messages', label: '留言管理', icon: MessageSquare },
         { to: '/admin/users', label: '用户管理', icon: Users },
+        { to: '/admin/changelog', label: '更新日志', icon: ScrollText },
         { to: '/admin/approvals', label: '审批中心', icon: ClipboardCheck },
         { to: '/admin/logs', label: '操作日志', icon: FileText },
       ]

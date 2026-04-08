@@ -18,7 +18,7 @@ const footerLinks = {
   资源: [
     { label: '使用教程', href: '#' },
     { label: '帮助中心', href: '#' },
-    { label: '更新日志', href: '#' },
+    { label: '更新日志', href: '/changelog' },
     { label: '开发文档', href: '#' },
   ],
   关于: [
@@ -72,9 +72,15 @@ export default function Footer() {
                 <ul className="space-y-2.5">
                   {links.map((link) => (
                     <li key={link.label}>
-                      <a href={link.href} className="text-sm text-gray-400 hover:text-emerald-500 transition-colors">
-                        {link.label}
-                      </a>
+                      {link.href.startsWith('/') ? (
+                        <Link to={link.href} className="text-sm text-gray-400 hover:text-emerald-500 transition-colors">
+                          {link.label}
+                        </Link>
+                      ) : (
+                        <a href={link.href} className="text-sm text-gray-400 hover:text-emerald-500 transition-colors">
+                          {link.label}
+                        </a>
+                      )}
                     </li>
                   ))}
 

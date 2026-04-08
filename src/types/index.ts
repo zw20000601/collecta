@@ -101,3 +101,15 @@ export interface AdminApprovalRequest {
   created_at: string
   reviewed_at?: string | null
 }
+
+export interface UpdateLog {
+  id: string
+  version: string
+  title: string
+  content: string
+  published_at: string
+  is_public: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}

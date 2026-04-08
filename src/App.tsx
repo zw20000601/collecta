@@ -12,6 +12,7 @@ const Categories = lazy(() => import('./pages/Categories'))
 const CategoryDetail = lazy(() => import('./pages/CategoryDetail'))
 const Favorites = lazy(() => import('./pages/Favorites'))
 const Messages = lazy(() => import('./pages/Messages'))
+const Changelog = lazy(() => import('./pages/Changelog'))
 const Login = lazy(() => import('./pages/Login'))
 const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'))
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'))
@@ -21,6 +22,7 @@ const AdminMessages = lazy(() => import('./pages/admin/Messages'))
 const AdminUsers = lazy(() => import('./pages/admin/Users'))
 const AdminLogs = lazy(() => import('./pages/admin/Logs'))
 const AdminApprovals = lazy(() => import('./pages/admin/Approvals'))
+const AdminChangelog = lazy(() => import('./pages/admin/Changelog'))
 const AdminLayout = lazy(() => import('./components/layout/AdminLayout'))
 
 function App() {
@@ -43,6 +45,7 @@ function App() {
           <Route path="messages" element={<AdminMessages />} />
           <Route path="users" element={<SuperAdminRoute><AdminUsers /></SuperAdminRoute>} />
           <Route path="logs" element={<SuperAdminRoute><AdminLogs /></SuperAdminRoute>} />
+          <Route path="changelog" element={<SuperAdminRoute><AdminChangelog /></SuperAdminRoute>} />
           <Route path="approvals" element={<AdminApprovals />} />
         </Route>
 
@@ -66,6 +69,7 @@ function App() {
                     }
                   />
                   <Route path="/messages" element={<Messages />} />
+                  <Route path="/changelog" element={<Changelog />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
