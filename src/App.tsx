@@ -4,6 +4,7 @@ import Navbar from './components/layout/Navbar'
 import Footer from './components/layout/Footer'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import AdminRoute from './components/auth/AdminRoute'
+import SuperAdminRoute from './components/auth/SuperAdminRoute'
 import PageLoader from './components/ui/PageLoader'
 
 const Home = lazy(() => import('./pages/Home'))
@@ -19,6 +20,7 @@ const AdminCategories = lazy(() => import('./pages/admin/Categories'))
 const AdminMessages = lazy(() => import('./pages/admin/Messages'))
 const AdminUsers = lazy(() => import('./pages/admin/Users'))
 const AdminLogs = lazy(() => import('./pages/admin/Logs'))
+const AdminApprovals = lazy(() => import('./pages/admin/Approvals'))
 const AdminLayout = lazy(() => import('./components/layout/AdminLayout'))
 
 function App() {
@@ -37,10 +39,11 @@ function App() {
         >
           <Route index element={<AdminDashboard />} />
           <Route path="resources" element={<AdminResources />} />
-          <Route path="categories" element={<AdminCategories />} />
+          <Route path="categories" element={<SuperAdminRoute><AdminCategories /></SuperAdminRoute>} />
           <Route path="messages" element={<AdminMessages />} />
-          <Route path="users" element={<AdminUsers />} />
-          <Route path="logs" element={<AdminLogs />} />
+          <Route path="users" element={<SuperAdminRoute><AdminUsers /></SuperAdminRoute>} />
+          <Route path="logs" element={<SuperAdminRoute><AdminLogs /></SuperAdminRoute>} />
+          <Route path="approvals" element={<AdminApprovals />} />
         </Route>
 
         {/* Frontend routes - with navbar */}

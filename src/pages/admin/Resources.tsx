@@ -1,8 +1,10 @@
 ﻿import { useState } from 'react'
 import { Plus, Pencil, Trash2, Search, Globe, Image } from 'lucide-react'
 import { useAdminResources, useCreateResource, useUpdateResource, useDeleteResource } from '../../hooks/useResources'
+import { useCreateApprovalRequest } from '../../hooks/useApprovals'
 import { useCategories } from '../../hooks/useCategories'
 import { useToast } from '../../contexts/ToastContext'
+import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import Button from '../../components/ui/Button'
 import Modal from '../../components/ui/Modal'
@@ -38,11 +40,14 @@ export default function AdminResources() {
   const { data: resources, isLoading } = useAdminResources({ search, category: catFilter })
   const { data: categories } = useCategories()
   const { showToast } = useToast()
+  const { isSuperAdmin } = useAuth()
+
   const create = useCreateResource()
   const update = useUpdateResource()
   const remove = useDeleteResource()
+  const createApproval = useCreateApprovalRequest()
 
-  const defaultCategory = categories?.find(c => isDefaultCategoryName(c.name))
+  const defaultCategory = categories?.find((c) => isDefaultCategoryName(c.name))
 
   const openCreate = () => {
     setEditTarget(null)
@@ -68,7 +73,7 @@ export default function AdminResources() {
 
   const handleCategoryChange = (catId: string) => {
     if (!catId) {
-      setForm(f => ({
+      setForm((f) => ({
         ...f,
         category_id: defaultCategory?.id || '',
         category_name: displayCategoryName(defaultCategory?.name || DEFAULT_CATEGORY_NAME),
@@ -76,19 +81,21 @@ export default function AdminResources() {
       return
     }
 
-    const cat = categories?.find(c => c.id === catId)
-    setForm(f => ({ ...f, category_id: catId, category_name: displayCategoryName(cat?.name || DEFAULT_CATEGORY_NAME) }))
+    const cat = categories?.find((c) => c.id === catId)
+    setForm((f) => ({ ...f, category_id: catId, category_name: displayCategoryName(cat?.name || DEFAULT_CATEGORY_NAME) }))
   }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
     if (file.size > 2 * 1024 * 1024) {
       showToast('图片大小不能超过 2MB', 'error')
       return
     }
 
     setUploading(true)
+
     const ext = file.name.split('.').pop() || 'jpg'
     const path = `covers/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
 
@@ -97,21 +104,28 @@ export default function AdminResources() {
       upsert: false,
       contentType: file.type || undefined,
     })
+
     if (error) {
       const msg = String(error.message || '')
-      if (msg.toLowerCase().includes('bucket') && msg.toLowerCase().includes('not found')) {
+      const lower = msg.toLowerCase()
+
+      if (lower.includes('bucket') && lower.includes('not found')) {
         showToast(`上传失败：未找到存储桶 "${COVER_BUCKET}"`, 'error')
-      } else if (msg.toLowerCase().includes('row-level security') || msg.toLowerCase().includes('policy') || msg.toLowerCase().includes('permission')) {
-        showToast('上传失败：Storage 权限不足，请配置 storage.objects 的上传策略', 'error')
+      } else if (lower.includes('row-level security') || lower.includes('policy') || lower.includes('permission')) {
+        showToast('上传失败：Storage 权限不足，请配置 storage.objects 上传策略', 'error')
       } else {
         showToast(`上传失败：${msg || '未知错误'}`, 'error')
       }
+
       setUploading(false)
       return
     }
 
-    const { data: { publicUrl } } = supabase.storage.from(COVER_BUCKET).getPublicUrl(path)
-    setForm(f => ({ ...f, cover_url: publicUrl }))
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(COVER_BUCKET).getPublicUrl(path)
+
+    setForm((f) => ({ ...f, cover_url: publicUrl }))
     showToast('封面上传成功')
     setUploading(false)
   }
@@ -130,7 +144,7 @@ export default function AdminResources() {
       return
     }
 
-    const selectedCategory = categories?.find(c => c.id === form.category_id) || defaultCategory
+    const selectedCategory = categories?.find((c) => c.id === form.category_id) || defaultCategory
 
     const payload = {
       title: form.title.trim(),
@@ -138,7 +152,7 @@ export default function AdminResources() {
       url: normalizeExternalUrl(form.url),
       category_id: selectedCategory?.id || undefined,
       category_name: displayCategoryName(selectedCategory?.name || form.category_name || DEFAULT_CATEGORY_NAME),
-      tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+      tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
       note: form.note,
       is_public: form.is_public,
       cover_url: form.cover_url,
@@ -171,6 +185,25 @@ export default function AdminResources() {
   const handleDelete = () => {
     if (!deleteTarget) return
 
+    if (!isSuperAdmin) {
+      createApproval.mutate(
+        {
+          actionType: 'delete_resource',
+          targetId: deleteTarget.id,
+          targetLabel: deleteTarget.title,
+          reason: '普通管理员申请删除资源',
+        },
+        {
+          onSuccess: () => {
+            showToast('已提交删除审批，等待总管理员处理')
+            setDeleteTarget(null)
+          },
+          onError: (e: any) => showToast(errMsg(e), 'error'),
+        }
+      )
+      return
+    }
+
     remove.mutate(deleteTarget.id, {
       onSuccess: () => {
         showToast('已删除')
@@ -184,7 +217,9 @@ export default function AdminResources() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-gray-800">资源管理</h1>
-        <Button onClick={openCreate}><Plus size={16} /> 新增资源</Button>
+        <Button onClick={openCreate}>
+          <Plus size={16} /> 新增资源
+        </Button>
       </div>
 
       <div className="flex gap-3 mb-4">
@@ -192,7 +227,7 @@ export default function AdminResources() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="搜索标题..."
             className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-300 bg-white"
           />
@@ -200,12 +235,14 @@ export default function AdminResources() {
 
         <select
           value={catFilter}
-          onChange={e => setCatFilter(e.target.value)}
+          onChange={(e) => setCatFilter(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-300"
         >
           <option value="">全部分类</option>
-          {categories?.map(c => (
-            <option key={c.id} value={displayCategoryName(c.name)}>{displayCategoryName(c.name)}</option>
+          {categories?.map((c) => (
+            <option key={c.id} value={displayCategoryName(c.name)}>
+              {displayCategoryName(c.name)}
+            </option>
           ))}
         </select>
       </div>
@@ -224,49 +261,63 @@ export default function AdminResources() {
 
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={5} className="text-center py-8 text-gray-400">加载中...</td></tr>
-            ) : resources?.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-8 text-gray-400">暂无资源</td></tr>
-            ) : resources?.map(r => (
-              <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <Globe size={14} className="text-gray-400 shrink-0" />
-                    <a
-                      href={normalizeExternalUrl(r.url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-gray-800 hover:text-emerald-500 font-medium truncate max-w-[180px]"
-                    >
-                      {r.title}
-                    </a>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-gray-500">{displayCategoryName(r.category_name)}</td>
-                <td className="px-4 py-3 hidden md:table-cell">
-                  <div className="flex gap-1 flex-wrap">
-                    {r.tags?.slice(0, 2).map(t => (
-                      <span key={t} className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs">{t}</span>
-                    ))}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <Badge variant={r.is_public ? 'success' : 'default'}>
-                    {r.is_public ? '公开' : '隐藏'}
-                  </Badge>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex gap-1 justify-end">
-                    <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors">
-                      <Pencil size={14} />
-                    </button>
-                    <button onClick={() => setDeleteTarget(r)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
+              <tr>
+                <td colSpan={5} className="text-center py-8 text-gray-400">加载中...</td>
               </tr>
-            ))}
+            ) : resources?.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="text-center py-8 text-gray-400">暂无资源</td>
+              </tr>
+            ) : (
+              resources?.map((r) => (
+                <tr key={r.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Globe size={14} className="text-gray-400 shrink-0" />
+                      <a
+                        href={normalizeExternalUrl(r.url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-800 hover:text-emerald-500 font-medium truncate max-w-[180px]"
+                      >
+                        {r.title}
+                      </a>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500">{displayCategoryName(r.category_name)}</td>
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    <div className="flex gap-1 flex-wrap">
+                      {r.tags?.slice(0, 2).map((t) => (
+                        <span key={t} className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant={r.is_public ? 'success' : 'default'}>{r.is_public ? '公开' : '隐藏'}</Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex gap-1 justify-end">
+                      {isSuperAdmin && (
+                        <button
+                          onClick={() => openEdit(r)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setDeleteTarget(r)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -278,7 +329,7 @@ export default function AdminResources() {
               <label className="text-sm font-medium text-gray-700 mb-1 block">标题 *</label>
               <input
                 value={form.title}
-                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-300"
               />
             </div>
@@ -287,7 +338,7 @@ export default function AdminResources() {
               <label className="text-sm font-medium text-gray-700 mb-1 block">资源链接 *</label>
               <input
                 value={form.url}
-                onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
                 placeholder="https://"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-300"
               />
@@ -297,7 +348,7 @@ export default function AdminResources() {
               <label className="text-sm font-medium text-gray-700 mb-1 block">描述</label>
               <textarea
                 value={form.description}
-                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 rows={3}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-300 resize-none"
               />
@@ -307,12 +358,14 @@ export default function AdminResources() {
               <label className="text-sm font-medium text-gray-700 mb-1 block">分类</label>
               <select
                 value={form.category_id}
-                onChange={e => handleCategoryChange(e.target.value)}
+                onChange={(e) => handleCategoryChange(e.target.value)}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-emerald-300"
               >
                 <option value="">{DEFAULT_CATEGORY_NAME}</option>
-                {categories?.map(c => (
-                  <option key={c.id} value={c.id}>{displayCategoryName(c.name)}</option>
+                {categories?.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {displayCategoryName(c.name)}
+                  </option>
                 ))}
               </select>
             </div>
@@ -321,7 +374,7 @@ export default function AdminResources() {
               <label className="text-sm font-medium text-gray-700 mb-1 block">标签（逗号分隔）</label>
               <input
                 value={form.tags}
-                onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
                 placeholder="标签1, 标签2"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-300"
               />
@@ -339,7 +392,7 @@ export default function AdminResources() {
               </div>
               <input
                 value={form.cover_url}
-                onChange={e => setForm(f => ({ ...f, cover_url: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, cover_url: e.target.value }))}
                 placeholder="或粘贴图片 URL（Storage 未配置时可先用此方式）"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-300"
               />
@@ -349,7 +402,7 @@ export default function AdminResources() {
               <label className="text-sm font-medium text-gray-700 mb-1 block">备注</label>
               <input
                 value={form.note}
-                onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-300"
               />
             </div>
@@ -359,7 +412,7 @@ export default function AdminResources() {
                 <input
                   type="checkbox"
                   checked={form.is_public}
-                  onChange={e => setForm(f => ({ ...f, is_public: e.target.checked }))}
+                  onChange={(e) => setForm((f) => ({ ...f, is_public: e.target.checked }))}
                   className="w-4 h-4 accent-emerald-500"
                 />
                 <span className="text-sm text-gray-700">公开显示</span>
@@ -368,7 +421,9 @@ export default function AdminResources() {
           </div>
 
           <div className="flex gap-3 justify-end pt-2">
-            <Button variant="outline" onClick={() => setModalOpen(false)}>取消</Button>
+            <Button variant="outline" onClick={() => setModalOpen(false)}>
+              取消
+            </Button>
             <Button onClick={handleSubmit} loading={create.isPending || update.isPending}>
               {editTarget ? '保存更改' : '添加资源'}
             </Button>
@@ -380,8 +435,12 @@ export default function AdminResources() {
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
-        message={`确定要删除资源「${deleteTarget?.title}」吗？此操作不可恢复。`}
-        loading={remove.isPending}
+        message={
+          isSuperAdmin
+            ? `确定要删除资源「${deleteTarget?.title}」吗？此操作不可恢复。`
+            : `将为资源「${deleteTarget?.title}」提交删除审批，需总管理员同意后才会执行。`
+        }
+        loading={remove.isPending || createApproval.isPending}
       />
     </div>
   )

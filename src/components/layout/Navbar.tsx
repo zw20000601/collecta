@@ -19,9 +19,7 @@ export default function Navbar() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [savingPassword, setSavingPassword] = useState(false)
 
-  const configuredAdminEmail = (import.meta.env.VITE_ADMIN_EMAIL || '').trim().toLowerCase()
-  const currentEmail = (user?.email || '').trim().toLowerCase()
-  const canShowAdminEntry = Boolean(isAdmin && configuredAdminEmail && currentEmail === configuredAdminEmail)
+  const canShowAdminEntry = Boolean(isAdmin)
 
   const navLinks = [
     { to: '/', label: '首页' },

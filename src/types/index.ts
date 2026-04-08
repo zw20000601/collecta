@@ -77,3 +77,27 @@ export interface AdminLog {
   created_at: string
   admin_email?: string
 }
+
+export type ApprovalActionType =
+  | 'delete_resource'
+  | 'delete_message'
+  | 'delete_message_reply'
+  | 'delete_category'
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
+
+export interface AdminApprovalRequest {
+  id: string
+  action_type: ApprovalActionType
+  target_id: string
+  target_label: string
+  reason: string
+  status: ApprovalStatus
+  requested_by: string
+  requested_by_email?: string
+  reviewed_by?: string | null
+  reviewed_by_email?: string | null
+  review_note?: string | null
+  created_at: string
+  reviewed_at?: string | null
+}

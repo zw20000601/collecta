@@ -7,6 +7,7 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   isAdmin: boolean
+  isSuperAdmin: boolean
   login: (email: string, password: string) => Promise<{ error: Error | null }>
   register: (email: string, password: string) => Promise<{ error: Error | null }>
   logout: () => Promise<void>
@@ -21,12 +22,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [isGuest, setIsGuest] = useState(false)
 
   const normalizeEmail = (email?: string | null) => (email || '').trim().toLowerCase()
+  const getSuperAdminEmail = () =>
+    normalizeEmail(import.meta.env.VITE_SUPER_ADMIN_EMAIL || import.meta.env.VITE_ADMIN_EMAIL)
 
   const promoteConfiguredAdmin = async (currentSession: Session) => {
-    const configuredAdminEmail = normalizeEmail(import.meta.env.VITE_ADMIN_EMAIL)
+    const configuredAdminEmail = getSuperAdminEmail()
     const currentEmail = normalizeEmail(currentSession.user?.email)
 
     if (!configuredAdminEmail || !currentEmail || configuredAdminEmail !== currentEmail) {
@@ -46,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkAdmin = async (currentSession: Session) => {
     await promoteConfiguredAdmin(currentSession)
 
-    const configuredAdminEmail = normalizeEmail(import.meta.env.VITE_ADMIN_EMAIL)
+    const configuredAdminEmail = getSuperAdminEmail()
     const currentEmail = normalizeEmail(currentSession.user?.email)
 
     const [{ data: rpcIsAdmin }, { data: profile }] = await Promise.all([
@@ -65,8 +69,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const adminByProfile = profileRole === 'admin'
     const adminByJwt = jwtRole === 'admin'
     const adminByEmail = Boolean(configuredAdminEmail && currentEmail && configuredAdminEmail === currentEmail)
+    const superAdminByEmail = Boolean(configuredAdminEmail && currentEmail && configuredAdminEmail === currentEmail)
 
     setIsAdmin(adminByRpc || adminByProfile || adminByJwt || adminByEmail)
+    setIsSuperAdmin(superAdminByEmail)
   }
 
   useEffect(() => {
@@ -83,6 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (mounted) setIsGuest(false)
       } else {
         setIsAdmin(false)
+        setIsSuperAdmin(false)
       }
 
       if (mounted) setLoading(false)
@@ -122,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, isAdmin, login, register, logout, loginAsGuest, isGuest }}>
+    <AuthContext.Provider value={{ user, session, loading, isAdmin, isSuperAdmin, login, register, logout, loginAsGuest, isGuest }}>
       {children}
     </AuthContext.Provider>
   )
