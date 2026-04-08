@@ -9,6 +9,26 @@ interface MessageFilters {
   sort?: 'newest' | 'votes' | 'pending'
 }
 
+async function attachLiveReplyCounts(messages: Message[]): Promise<Message[]> {
+  if (messages.length === 0) return messages
+
+  const ids = messages.map((m) => m.id)
+  const { data, error } = await supabase
+    .from('message_replies')
+    .select('message_id')
+    .in('message_id', ids)
+
+  if (error) return messages
+
+  const replyCountMap = new Map<string, number>()
+  for (const row of data || []) {
+    const messageId = (row as { message_id: string }).message_id
+    replyCountMap.set(messageId, (replyCountMap.get(messageId) || 0) + 1)
+  }
+
+  return messages.map((m) => ({ ...m, reply_count: replyCountMap.get(m.id) || 0 }))
+}
+
 export function useMessages(filters: MessageFilters = {}) {
   const { user } = useAuth()
   const PAGE_SIZE = 10
@@ -39,8 +59,10 @@ export function useMessages(filters: MessageFilters = {}) {
       const { data, error } = await query
       if (error) throw error
 
-      // Check if current user has voted
       let messages = (data || []) as Message[]
+      messages = await attachLiveReplyCounts(messages)
+
+      // Check if current user has voted
       if (user && messages.length > 0) {
         const ids = messages.map(m => m.id)
         const { data: votes } = await supabase
@@ -72,7 +94,7 @@ export function useAdminMessages(filters: { status?: string; search?: string } =
       }
       const { data, error } = await query
       if (error) throw error
-      return (data || []) as Message[]
+      return attachLiveReplyCounts((data || []) as Message[])
     },
   })
 }
@@ -137,6 +159,7 @@ export function useCreateReply() {
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ['message-replies', v.messageId] })
       qc.invalidateQueries({ queryKey: ['messages'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'messages'] })
     },
   })
 }
